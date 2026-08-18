@@ -78,14 +78,20 @@ $requiredRegions = @(
     '\uD83C\uDDF9\uD83C\uDDF7 \u571F\u8033\u5176\u8282\u70B9',
     '\uD83C\uDF10 \u5176\u4ED6\u5730\u533A'
 ) | ForEach-Object { ConvertFrom-UnicodeEscape $_ }
+$directGroup = ConvertFrom-UnicodeEscape '\uD83C\uDFAF \u5168\u7403\u76F4\u8FDE'
+$otherRegionGroup = ConvertFrom-UnicodeEscape '\uD83C\uDF10 \u5176\u4ED6\u5730\u533A'
 foreach ($region in $requiredRegions) {
     if ($groups -notcontains $region) { $errors.Add("Missing region group: $region") }
 }
-
-$directGroup = ConvertFrom-UnicodeEscape '\uD83C\uDFAF \u5168\u7403\u76F4\u8FDE'
+$otherLine = @($lines | Where-Object { $_.StartsWith('custom_proxy_group=' + $otherRegionGroup) })
+if ($otherLine.Count -ne 1) {
+    $errors.Add('Expected exactly one other-region group')
+} elseif ($otherLine[0].Contains('[]')) {
+    $errors.Add('Other-region group must not contain region group options')
+}
 foreach ($line in $lines | Where-Object { $_ -match '^custom_proxy_group=[^`]+`select`' }) {
     $groupName = ($line -split '`')[0].Substring('custom_proxy_group='.Length)
-    if ($groupName -eq $directGroup) { continue }
+    if ($groupName -eq $directGroup -or $groupName -eq $otherRegionGroup) { continue }
     foreach ($region in $requiredRegions) {
         if ($region -eq $groupName) { continue }
         if (-not $line.Contains("[]$region")) {
