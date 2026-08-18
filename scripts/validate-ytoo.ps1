@@ -82,6 +82,18 @@ foreach ($region in $requiredRegions) {
     if ($groups -notcontains $region) { $errors.Add("Missing region group: $region") }
 }
 
+$directGroup = ConvertFrom-UnicodeEscape '\uD83C\uDFAF \u5168\u7403\u76F4\u8FDE'
+foreach ($line in $lines | Where-Object { $_ -match '^custom_proxy_group=[^`]+`select`' }) {
+    $groupName = ($line -split '`')[0].Substring('custom_proxy_group='.Length)
+    if ($groupName -eq $directGroup) { continue }
+    foreach ($region in $requiredRegions) {
+        if ($region -eq $groupName) { continue }
+        if (-not $line.Contains("[]$region")) {
+            $errors.Add("Policy group $groupName is missing region option: $region")
+        }
+    }
+}
+
 if ($lines -match 'http://www\.gstatic\.com/generate_204') {
     $errors.Add('Health-check URL must use HTTPS')
 }
@@ -119,9 +131,13 @@ if (-not (Test-Path -LiteralPath $customDir)) {
     }
 }
 
-$allowedTopLevel = @('.git','.planning','docs','remote-config','ruleset','scripts','README.md')
-Get-ChildItem -LiteralPath $root -Force | Where-Object { $_.Name -notin $allowedTopLevel } | ForEach-Object {
-    $errors.Add("Unexpected top-level path outside ytoo chain: $($_.Name)")
+$allowedTopLevel = @('.gitignore','remote-config','ruleset','scripts','README.md')
+$trackedPaths = @(git -C $root ls-files)
+$trackedPaths | ForEach-Object {
+    $top = ($_ -split '[\\/]')[0]
+    if ($top -notin $allowedTopLevel) {
+        $errors.Add("Unexpected tracked top-level path outside ytoo chain: $top")
+    }
 }
 
 if ($errors.Count -gt 0) {
